@@ -6,10 +6,10 @@ Node.js package to access OPC Da 2.0 for reading and writing,Both X86/X64 suppor
 
 ## Usage
 
-*>git clone http://github.com/lizhengzhou/node-opcda.git
-*>cd node-opcda
-*>node index.js
-*Kepware.KEPServerEX.V6
+* >git clone http://github.com/lizhengzhou/node-opcda.git
+* >cd node-opcda
+* >node index.js
+* Kepware.KEPServerEX.V6
 
 
 ## Detail & ChangeLog
