@@ -1,0 +1,30 @@
+{
+  "name": "opcda",
+  "version": "1.0.0",
+  "description": "opcda 2.0 wrapper for node js",
+  "main": "index.js",
+  "scripts": {
+    "test": "node index.js",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lizhengzhou/node-opcda.git"
+  },
+  "keywords": [
+    "opc",
+    "da",
+    "plc",
+    "C++",
+    "javascript",
+    "x64"
+  ],
+  "author": "Zhengzhou Li",
+  "license": "MIT",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/lizhengzhou/node-opcda/issues"
+  },
+  "homepage": "https://github.com/lizhengzhou/node-opcda#readme",
+  "dependencies": {}
+}
