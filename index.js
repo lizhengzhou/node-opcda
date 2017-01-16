@@ -10,7 +10,3 @@ opcda.list("DESKTOP-JFJ715E", function (err, progs) {
         console.log(prog)
     });
 })
-//opcda((msg) => {
-//    console.log(msg);
-//// Prints: 'hello world'
-//});
