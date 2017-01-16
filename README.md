@@ -4,6 +4,14 @@ Node.js package to access OPC Da 2.0 for reading and writing,Both X86/X64 suppor
 ## Known Issues
 * the x64 version has some address corruption problem when you are using VS2012 or later, you can open "Project Property -> Linker -> CommandLine", then add `/HIGHENTROPYVA:NO` to avoid this issue, See [Issue#1](https://github.com/edimetia3d/OPC-Client-X64/issues/1) for more detail
 
+## Usage
+
+>git clone http://github.com/lizhengzhou/node-opcda.git
+>cd node-opcda
+>node index.js
+Kepware.KEPServerEX.V6
+
+
 ## Detail & ChangeLog
 * Date:2017-01-16
 	* Modified from X64 Version [OPC-Client-X64 by edimetia3d](https://github.com/edimetia3d/OPC-Client-X64)
