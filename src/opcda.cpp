@@ -57,28 +57,6 @@ std::string GetStr(VARIANT var){
 	return str.GetString();
 }
 
-
-/**
-* Handle asynch data coming from changes in the OPC group
-*/
-class CMyCallback :public IAsynchDataCallback{
-public:
-	void OnDataChange(COPCGroup & group, CAtlMap<COPCItem *, OPCItemData *> & changes){
-		//Isolate* isolate = Isolate::GetCurrent();
-		printf("Group %s, item changes\n", group.getName().c_str());
-			POSITION pos = changes.GetStartPosition();
-
-			{
-				COPCItem * item = changes.GetNextKey(pos);
-				printf("-----> %s\n", item->getName().c_str());
-				OPCItemData data;
-				item->readSync(data, OPC_DS_DEVICE);
-				printf("Synch read quality %d value %d\n", data.wQuality, data.vDataValue.iVal);
-
-			}
-	}
-};
-
 void Init(const FunctionCallbackInfo<Value>& args) {
 	Nan::HandleScope scope;
 
@@ -89,11 +67,6 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 	std::string progId = "Kepware.KEPServerEX.V6";
 	COPCServer *opcServer = host->connectDAServer(progId);
 
-	//// browse server
-	//std::vector<std::string> opcItemNames;
-	//opcServer->getItemNames(opcItemNames);
-
-	// make group
 	unsigned long refreshRate;
 	COPCGroup *group = opcServer->makeGroup("Group", true, 1000, refreshRate, 0.0);
 
@@ -103,16 +76,13 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 	std::vector<HRESULT> errors;
 
 	itemNames.push_back("Data Type Examples.16 Bit Device.R Registers.Short1");
+	itemNames.push_back("Data Type Examples.16 Bit Device.R Registers.Short2");
 	if (group->addItems(itemNames, itemsCreated, errors, true) != 0){
 		printf("Item create failed\n");
 	}
 
-	//OPCItemData data;
-	//itemsCreated[0]->readSync(data, OPC_DS_DEVICE);
-	//printf("Synch read quality %d value %d\n", data.wQuality, data.vDataValue.iVal);
-
 	WatchBaton* baton = new WatchBaton();
-	//memset(baton, 0, sizeof(WatchBaton));
+
 	strcpy(baton->errorString, "");
 	baton->opcServer = opcServer;
 	baton->group = group;
@@ -137,59 +107,30 @@ void DataChangeNode(WatchBaton* baton){
 
 void EIO_WatchData(uv_work_t* req){
 	WatchBaton* baton = static_cast<WatchBaton*>(req->data);
-	COPCGroup* group = baton->group;
+
 	COPCItem_DataMap datamap;
-	group->readSync(baton->itemsCreated, datamap, OPC_DS_CACHE);
-	printf("%s\n", baton->itemsCreated[0]->getName().c_str());
-
-	OPCItemData data;
-	ServerStatus status;
-	baton->opcServer->getStatus(status);
-	printf("Server state is %ld\n", status.dwServerState);
-	printf("Synch read quality %d value %d\n", data.wQuality, data.vDataValue.iVal);
-	try{
-		baton->itemsCreated[0]->readSync(data, OPC_DS_DEVICE);
-	}
-	catch (const char* &e){
-		std::cout << "Standard exception: " << e << std::endl;
-	}
+	baton->group->readSync(baton->itemsCreated, datamap, OPC_DS_CACHE);
 	
-	printf("Synch read quality %d value %d\n", data.wQuality, data.vDataValue.iVal);
-
 	POSITION pos = datamap.GetStartPosition();
+	int index = 0;
 	while (pos != NULL)
 	{
-		CAtlMap<COPCItem *, OPCItemData *>::CPair* mapitem = datamap.GetNext(pos);
-		printf("%s\n", "hello word");
-		COPCItem* item = mapitem->m_key;
-		OPCItemData* itemdata = mapitem->m_value;
-
-		//printf("%s\n", item->getName().c_str());
-
-		//printf("%s\n", item->getName().c_str());
-		//std::string vNameStr = item->getName().c_str();
-		printf("%d\n", itemdata->vDataValue.iVal);
-		//char str[1024];
-		//itoa(itemdata->vDataValue.iVal, str, 10);
-		//std::string vDataStr = str;
-		//printf("%s\n", "hello word");
-		//std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
-		//if (iter != baton->datacache.end())
-		//{
-		//	printf("%s\n", "hello word");
-		//	if ((*iter).second != vDataStr){
-		//		baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
-		//		(*iter).second = vDataStr;
-		//	}
-		//}
-	}
-	printf("%s\n", "end");
-
-	//itoa(itemdata->vDataValue.iVal, data->Str, 10);
+		COPCItem* item = baton->itemsCreated[index++];
+		OPCItemData* itemdata = datamap.GetNextValue(pos);
+		std::string vNameStr = item->getName().c_str();
+		std::string vDataStr = GetStr(itemdata->vDataValue);
+		std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
+		if (iter != baton->datacache.end())
+		{			
+			if ((*iter).second != vDataStr){
+				baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
+				(*iter).second = vDataStr;
+			}
+		}
+	}	
 }
 
 void EIO_AfterWatchData(uv_work_t* req){
-	printf("%s\n", "EIO_AfterWatchData");
 	Nan::HandleScope scope;
 	WatchBaton* baton = static_cast<WatchBaton*>(req->data);
 
@@ -201,19 +142,22 @@ void EIO_AfterWatchData(uv_work_t* req){
 	{		
 		Local<Object> item = Nan::New<Object>();
 		item->Set(Nan::New<String>("Addr").ToLocalChecked(), Nan::New<String>((*iter).first).ToLocalChecked());
+		item->Set(Nan::New<String>("Value").ToLocalChecked(), Nan::New<String>((*iter).second).ToLocalChecked());
 		resultList->Set(i, item);
 		i++;
 	}
+	baton->dataChanged.clear();
+
 	unsigned int argc = 2;
 	v8::Local<v8::Value> argv[2];
 	argv[0] = Nan::Undefined();
 	argv[1] = resultList;
 
-	if (baton->dataCallback){
+	if (resultList->Length() > 0 && baton->dataCallback){
 		baton->dataCallback->Call(argc, argv);
 	}
 
-	//DataChangeNode(baton);
+	DataChangeNode(baton);
 }
 
 

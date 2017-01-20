@@ -17,8 +17,6 @@
 #include <sys\timeb.h>
 #include <algorithm>
 #include <map>
-#include<iostream>
-#include <exception>
 
 
 
