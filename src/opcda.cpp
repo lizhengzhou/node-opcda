@@ -61,27 +61,67 @@ std::string GetStr(VARIANT var){
 	return str.GetString();
 }
 
+v8::Local<v8::Value> getValueFromObject(v8::Local<v8::Object> options, std::string key) {
+	v8::Local<v8::String> v8str = Nan::New<v8::String>(key).ToLocalChecked();
+	return Nan::Get(options, v8str).ToLocalChecked();
+}
+
+v8::Local<v8::String> getStringFromObj(v8::Local<v8::Object> options, std::string key) {
+	return getValueFromObject(options, key)->ToString();
+}
+
 NAN_METHOD(Init) {
-	//Nan::HandleScope scope;
+	Nan::HandleScope scope;
+	// host
+	if (!info[0]->IsString()) {
+		Nan::ThrowTypeError("First argument must be a string");
+		return;
+	}
+	v8::String::Utf8Value lHostName(info[0]->ToString());
+
+	// options
+	if (!info[1]->IsObject()) {
+		Nan::ThrowTypeError("Second argument must be an object");
+		return;
+	}
+	v8::Local<v8::Object> lOptions = Local<Object>::Cast(info[1]);
+
+	// callback
+	if (!info[2]->IsFunction()) {
+		Nan::ThrowTypeError("Third argument must be a function");
+		return;
+	}
+
+	InitBaton* initBaton = new InitBaton();
+	//memset(initBaton, 0, sizeof(InitBaton));
+	//printf("%s\n", std::string(*lHostName));
+	initBaton->HostName = std::string(*lHostName);
+	
+	v8::String::Utf8Value ProgId(getStringFromObj(lOptions, "ProgId"));
+	initBaton->ProgId = std::string(*ProgId);
+
+	Local<Array> itemNames = Local<Array>::Cast(getValueFromObject(lOptions, "itemNames"));
+	for (unsigned int i = 0; i < itemNames->Length(); i++) {
+		v8::String::Utf8Value itemName(itemNames->Get(i));
+		//printf("%s\n", std::string(*itemName));
+		initBaton->itemNames.push_back(std::string(*itemName));
+	}
+	initBaton->dataCallback = new Nan::Callback(getValueFromObject(lOptions, "OnDataChange").As<v8::Function>());
+	initBaton->callback.Reset(info[2].As<v8::Function>());
 
 	COPCClient::init();
-	std::string hostName = "DESKTOP-JFJ715E";
-	COPCHost *host = COPCClient::makeHost(hostName);
 
-	std::string progId = "Kepware.KEPServerEX.V6";
-	COPCServer *opcServer = host->connectDAServer(progId);
+	COPCHost *host = COPCClient::makeHost(initBaton->HostName);
+	COPCServer *opcServer = host->connectDAServer(initBaton->ProgId);
 
 	unsigned long refreshRate;
 	COPCGroup *group = opcServer->makeGroup("Group", true, 1000, refreshRate, 0.0);
 
 	// make several items
-	std::vector<std::string> itemNames;
 	std::vector<COPCItem *>itemsCreated;
 	std::vector<HRESULT> errors;
 
-	itemNames.push_back("Data Type Examples.16 Bit Device.R Registers.Short1");
-	itemNames.push_back("Data Type Examples.16 Bit Device.R Registers.Short2");
-	if (group->addItems(itemNames, itemsCreated, errors, true) != 0){
+	if (group->addItems(initBaton->itemNames, itemsCreated, errors, true) != 0){
 		printf("Item create failed\n");
 	}
 
@@ -96,10 +136,10 @@ NAN_METHOD(Init) {
 		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));
 		//printf("%s", itemsCreated[i]->getName().c_str());
 	}
-	baton->dataCallback = new Nan::Callback(info[0].As<v8::Function>());
+	baton->dataCallback = initBaton->dataCallback;
 
 	DataChangeNode(baton);
-	//args.GetReturnValue().SetUndefined();
+
 }
 
 
