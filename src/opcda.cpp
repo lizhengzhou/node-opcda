@@ -8,6 +8,10 @@ std::string GetStr(VARIANT var){
 	//以下代码演示如何转换为C标准字符串型
 	switch (var.vt)
 	{
+	case VT_EMPTY:{
+		str = "";
+		break;
+	}
 	case VT_BSTR:
 	{
 		str = var.bstrVal;
@@ -57,8 +61,8 @@ std::string GetStr(VARIANT var){
 	return str.GetString();
 }
 
-void Init(const FunctionCallbackInfo<Value>& args) {
-	Nan::HandleScope scope;
+NAN_METHOD(Init) {
+	//Nan::HandleScope scope;
 
 	COPCClient::init();
 	std::string hostName = "DESKTOP-JFJ715E";
@@ -86,23 +90,23 @@ void Init(const FunctionCallbackInfo<Value>& args) {
 	strcpy(baton->errorString, "");
 	baton->opcServer = opcServer;
 	baton->group = group;
-	baton->itemsCreated = itemsCreated;		
+	baton->itemsCreated = itemsCreated;
 	for (int i = 0; i < itemsCreated.size(); i++)
-	{				
+	{
 		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));
 		//printf("%s", itemsCreated[i]->getName().c_str());
 	}
-	baton->dataCallback = new Nan::Callback(args[0].As<v8::Function>());	
+	baton->dataCallback = new Nan::Callback(info[0].As<v8::Function>());
 
-	DataChangeNode(baton);	
-	args.GetReturnValue().SetUndefined();
+	DataChangeNode(baton);
+	//args.GetReturnValue().SetUndefined();
 }
 
 
 void DataChangeNode(WatchBaton* baton){
 	uv_work_t * req = new uv_work_t();
 	req->data = baton;
-	uv_queue_work(uv_default_loop(), req, EIO_WatchData, (uv_after_work_cb)EIO_AfterWatchData);	
+	uv_queue_work(uv_default_loop(), req, EIO_WatchData, (uv_after_work_cb)EIO_AfterWatchData);
 }
 
 void EIO_WatchData(uv_work_t* req){
@@ -110,7 +114,7 @@ void EIO_WatchData(uv_work_t* req){
 
 	COPCItem_DataMap datamap;
 	baton->group->readSync(baton->itemsCreated, datamap, OPC_DS_CACHE);
-	
+
 	POSITION pos = datamap.GetStartPosition();
 	int index = 0;
 	while (pos != NULL)
@@ -121,13 +125,13 @@ void EIO_WatchData(uv_work_t* req){
 		std::string vDataStr = GetStr(itemdata->vDataValue);
 		std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
 		if (iter != baton->datacache.end())
-		{			
+		{
 			if ((*iter).second != vDataStr){
 				baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
 				(*iter).second = vDataStr;
 			}
 		}
-	}	
+	}
 }
 
 void EIO_AfterWatchData(uv_work_t* req){
@@ -139,7 +143,7 @@ void EIO_AfterWatchData(uv_work_t* req){
 	std::map<std::string, std::string>::iterator iter;
 	int i = 0;
 	for (iter = baton->dataChanged.begin(); iter != baton->dataChanged.end(); ++iter)
-	{		
+	{
 		Local<Object> item = Nan::New<Object>();
 		item->Set(Nan::New<String>("Addr").ToLocalChecked(), Nan::New<String>((*iter).first).ToLocalChecked());
 		item->Set(Nan::New<String>("Value").ToLocalChecked(), Nan::New<String>((*iter).second).ToLocalChecked());
@@ -161,8 +165,9 @@ void EIO_AfterWatchData(uv_work_t* req){
 }
 
 
-void InterfaceInit(Local<Object> exports) {
-	NODE_SET_METHOD(exports, "OnDataChange", Init);
+void InterfaceInit(v8::Handle<v8::Object> target) {
+	Nan::HandleScope scope;
+	Nan::SetMethod(target, "Init", Init);
 }
 
 

@@ -4,7 +4,21 @@
 
 const opcda = require('./build/Release/opcda');
 
-opcda.OnDataChange(function (err, data) {
+//opcda.Init("DESKTOP-JFJ715E", {
+//    ProgId: "Kepware.KEPServerEX.V6",
+//    itemNames: [
+//        "Data Type Examples.16 Bit Device.R Registers.Short1",
+//        "Data Type Examples.16 Bit Device.R Registers.Short2"
+//    ],
+//    OnDataChange: function (err, data) {
+//        if (err) console.log(err);
+//        console.log(data);
+//    }
+//}, function (err) {
+//    if (err) console.log(err);
+//})
+
+opcda.Init(function (err, data) {
     if(err)console.log(err);
     console.log(data);
 })

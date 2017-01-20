@@ -22,6 +22,15 @@
 
 #define ERROR_STRING_SIZE 1024
 
+struct InitBaton
+{
+	std::string HostName;
+	std::string ProgId;
+	std::vector<std::string>itemNames;
+	Nan::Callback* dataCallback;
+	Nan::Callback callback;
+	char errorString[ERROR_STRING_SIZE];
+};
 
 struct WatchBaton
 {
