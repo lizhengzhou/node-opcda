@@ -17,7 +17,7 @@ opcda.Init("DESKTOP-JFJ715E", {
 }, function (err) {
     if (err) console.log(err);
 })
-
+console.log('good');
 //opcda.Init(function (err, data) {
 //    if(err)console.log(err);
 //    console.log(data);

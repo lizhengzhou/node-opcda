@@ -2,6 +2,100 @@
 
 using namespace v8;
 
+static uv_async_t s_async = { 0 };
+std::string GetStr(VARIANT var);
+
+class CMyCallback :public IAsynchDataCallback{
+	WatchBaton* baton;
+public:
+	CMyCallback(WatchBaton * wbaton)
+	{
+		baton = wbaton;
+	}
+
+	void OnDataChange(COPCGroup & group, CAtlMap<COPCItem *, OPCItemData *> & datamap){
+
+		POSITION pos = datamap.GetStartPosition();
+		int index = 0;
+		while (pos != NULL)
+		{
+			COPCItem* item = baton->itemsCreated[index++];
+			OPCItemData* itemdata = datamap.GetNextValue(pos);
+			std::string vNameStr = item->getName().c_str();
+			std::string vDataStr = GetStr(itemdata->vDataValue);
+			std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
+			if (iter != baton->datacache.end())
+			{
+				if ((*iter).second != vDataStr){
+					baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
+					(*iter).second = vDataStr;
+				}
+			}
+		}
+		s_async.data = baton;
+		uv_async_send(&s_async);
+
+		//printf("Group %s, item changes\n", group.getName().c_str());
+		//POSITION pos = changes.GetStartPosition();
+		//if (pos != NULL){
+		//	OPCItemData* itemdata = changes.GetNextValue(pos);
+		//	std::string vDataStr = GetStr(itemdata->vDataValue);
+		//	//printf("async_cb called : %s !\n", vDataStr);
+
+		//	char errorString[ERROR_STRING_SIZE];
+		//	strcpy(errorString, "");
+		//	strcpy(errorString, vDataStr.c_str());
+
+		//	s_async.data = (void*)&errorString;
+		//	//printf("s_async.data : %s !\n", errorString);
+		//	uv_async_send(&s_async);
+		//	//printf("-----> %s\n", item->getName().c_str());
+		//	//OPCItemData data;
+		//	//item->readSync(data, OPC_DS_DEVICE);
+		//	//printf("Synch read quality %d value %d\n", data.wQuality, data.vDataValue.iVal);
+		//}
+
+	}
+
+};
+
+
+
+void async_cb(uv_async_t* handle)
+{
+	Nan::HandleScope scope;
+	WatchBaton* baton = static_cast<WatchBaton*>(handle->data);
+
+	Local<Array> resultList = Nan::New<Array>();
+
+	std::map<std::string, std::string>::iterator iter;
+	int i = 0;
+	for (iter = baton->dataChanged.begin(); iter != baton->dataChanged.end(); ++iter)
+	{
+		Local<Object> item = Nan::New<Object>();
+		item->Set(Nan::New<String>("Addr").ToLocalChecked(), Nan::New<String>((*iter).first).ToLocalChecked());
+		item->Set(Nan::New<String>("Value").ToLocalChecked(), Nan::New<String>((*iter).second).ToLocalChecked());
+		resultList->Set(i, item);
+		i++;
+	}
+	baton->dataChanged.clear();
+
+	unsigned int argc = 2;
+	v8::Local<v8::Value> argv[2];
+	argv[0] = Nan::Undefined();
+	argv[1] = resultList;
+
+	if (resultList->Length() > 0 && baton->dataCallback){
+		baton->dataCallback->Call(argc, argv);
+	}
+
+	//std::string* str = static_cast<std::string*>(handle->data);
+	//printf("async_cb called : %s !\n", handle->data);
+	//printf("async_cb called : %s !\n", *(std::string*)handle->data);
+	//uv_thread_t id = uv_thread_self();
+	//printf("thread id:%lu.\n", id);
+	//uv_close((uv_handle_t*)&s_async, NULL);   //如果async没有关闭，消息队列是会阻塞的  
+}
 
 std::string GetStr(VARIANT var){
 	CString str;
@@ -70,6 +164,50 @@ v8::Local<v8::String> getStringFromObj(v8::Local<v8::Object> options, std::strin
 	return getValueFromObject(options, key)->ToString();
 }
 
+#define MESSAGEPUMPUNTIL(x)	while(!x){{MSG msg;while(PeekMessage(&msg,NULL,NULL,NULL,PM_REMOVE)){TranslateMessage(&msg);DispatchMessage(&msg);}Sleep(1);}}
+
+void sub_thread(void* arg)
+{
+	InitBaton* initBaton = static_cast<InitBaton*>(arg);
+
+	COPCClient::init();
+
+	COPCHost *host = COPCClient::makeHost(initBaton->HostName);
+	COPCServer *opcServer = host->connectDAServer(initBaton->ProgId);
+
+	unsigned long refreshRate;
+	COPCGroup *group = opcServer->makeGroup("Group", true, 1000, refreshRate, 0.0);
+
+	// make several items
+	std::vector<COPCItem *>itemsCreated;
+	std::vector<HRESULT> errors;
+
+	if (group->addItems(initBaton->itemNames, itemsCreated, errors, true) != 0){
+		printf("Item create failed\n");
+	}
+
+	WatchBaton* baton = new WatchBaton();
+
+	strcpy(baton->errorString, "");
+	baton->opcServer = opcServer;
+	baton->group = group;
+	baton->itemsCreated = itemsCreated;
+	for (int i = 0; i < itemsCreated.size(); i++)
+	{
+		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));
+		//printf("%s", itemsCreated[i]->getName().c_str());
+	}
+	baton->dataCallback = initBaton->dataCallback;
+
+	CMyCallback usrCallBack(baton);
+	group->enableAsynch(usrCallBack);
+
+	MESSAGEPUMPUNTIL(false)
+	/*uv_thread_t id = uv_thread_self();
+	printf("sub thread id:%lu.\n", id);
+	uv_async_send(&s_async);*/
+}
+
 NAN_METHOD(Init) {
 	Nan::HandleScope scope;
 	// host
@@ -109,36 +247,48 @@ NAN_METHOD(Init) {
 	initBaton->dataCallback = new Nan::Callback(getValueFromObject(lOptions, "OnDataChange").As<v8::Function>());
 	initBaton->callback.Reset(info[2].As<v8::Function>());
 
-	COPCClient::init();
+	uv_async_init(uv_default_loop(), &s_async, async_cb);
+	//创建子线程  
+	uv_thread_t thread;
+	uv_thread_create(&thread, sub_thread, initBaton);
 
-	COPCHost *host = COPCClient::makeHost(initBaton->HostName);
-	COPCServer *opcServer = host->connectDAServer(initBaton->ProgId);
 
-	unsigned long refreshRate;
-	COPCGroup *group = opcServer->makeGroup("Group", true, 1000, refreshRate, 0.0);
+	//COPCClient::init();
 
-	// make several items
-	std::vector<COPCItem *>itemsCreated;
-	std::vector<HRESULT> errors;
+	//COPCHost *host = COPCClient::makeHost(initBaton->HostName);
+	//COPCServer *opcServer = host->connectDAServer(initBaton->ProgId);
 
-	if (group->addItems(initBaton->itemNames, itemsCreated, errors, true) != 0){
-		printf("Item create failed\n");
-	}
+	//unsigned long refreshRate;
+	//COPCGroup *group = opcServer->makeGroup("Group", true, 1000, refreshRate, 0.0);
 
-	WatchBaton* baton = new WatchBaton();
+	//// make several items
+	//std::vector<COPCItem *>itemsCreated;
+	//std::vector<HRESULT> errors;
 
-	strcpy(baton->errorString, "");
-	baton->opcServer = opcServer;
-	baton->group = group;
-	baton->itemsCreated = itemsCreated;
-	for (int i = 0; i < itemsCreated.size(); i++)
-	{
-		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));
-		//printf("%s", itemsCreated[i]->getName().c_str());
-	}
-	baton->dataCallback = initBaton->dataCallback;
+	//if (group->addItems(initBaton->itemNames, itemsCreated, errors, true) != 0){
+	//	printf("Item create failed\n");
+	//}
 
-	DataChangeNode(baton);
+	//CMyCallback usrCallBack;
+	//group->enableAsynch(usrCallBack);
+
+
+	//WatchBaton* baton = new WatchBaton();
+
+	//strcpy(baton->errorString, "");
+	//baton->opcServer = opcServer;
+	//baton->group = group;
+	//baton->itemsCreated = itemsCreated;
+	//for (int i = 0; i < itemsCreated.size(); i++)
+	//{
+	//	baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));
+	//	//printf("%s", itemsCreated[i]->getName().c_str());
+	//}
+	//baton->dataCallback = initBaton->dataCallback;
+
+	//Sleep(100000);
+
+	//DataChangeNode(baton);
 
 }
 
