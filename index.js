@@ -1,6 +1,6 @@
 ﻿'use strict';
 
-// Copyright 2017 Chris Williams <lizhenzhou1026@gmail.com>
+// Copyright 2017 lizz <lizhenzhou1026@gmail.com>
 
 const opcda = require('./build/Release/opcda');
 
