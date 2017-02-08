@@ -3,6 +3,8 @@
 #include "nodeopcda.h"
 
 using namespace v8;
+static std::vector<COPCItem *>_itemsCreated;
+
 
 class dataChangeCallback :public IAsynchDataCallback{
 	WatchBaton* baton;
@@ -15,21 +17,40 @@ public:
 	void OnDataChange(COPCGroup & group, CAtlMap<COPCItem *, OPCItemData *> & datamap){
 
 		POSITION pos = datamap.GetStartPosition();
-		int index = 0;
+		std::string vNameStr, vDataStr;
 		while (pos != NULL)
 		{
-			COPCItem* item = baton->itemsCreated[index++];
-			OPCItemData* itemdata = datamap.GetNextValue(pos);
-			std::string vNameStr = item->getName().c_str();
-			std::string vDataStr = GetStr(itemdata->vDataValue);
-			std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
-			if (iter != baton->datacache.end())
-			{
-				if ((*iter).second != vDataStr){
-					baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
-					(*iter).second = vDataStr;
+			COPCItem_DataMap::CPair* itemPair = datamap.GetNext(pos);
+			
+			COPCItem* item = itemPair->m_key;
+			OPCItemData* itemdata = itemPair->m_value;
+
+			//printf("Value=%s\n", GetStr(itemdata->vDataValue));
+			vDataStr = GetStr(itemdata->vDataValue);
+
+			for (int i = 0; i < baton->itemsCreated.size(); i++){
+				if ((DWORD)baton->itemsCreated[i] == (DWORD)item)
+				{
+					item = baton->itemsCreated[i];
+					//printf("find2\n");
 				}
 			}
+
+			//printf("Name=%s\n", item->getName().c_str());
+			vNameStr = item->getName().c_str();
+			baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
+			//COPCItem* item = baton->itemsCreated[index++];
+			//OPCItemData* itemdata = datamap.GetNextValue(pos);
+			//std::string vNameStr = item->getName().c_str();
+			//std::string vDataStr = GetStr(itemdata->vDataValue);
+			//std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
+			//if (iter != baton->datacache.end())
+			//{
+			//	if ((*iter).second != vDataStr){
+			//		baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
+			//		(*iter).second = vDataStr;
+			//	}
+			//}
 		}
 		s_async.data = baton;
 		uv_async_send(&s_async);
@@ -93,6 +114,7 @@ void gather_thread(void* arg)
 	baton->opcServer = opcServer;
 	baton->group = group;
 	baton->itemsCreated = itemsCreated;
+	_itemsCreated = itemsCreated;
 	for (int i = 0; i < itemsCreated.size(); i++)
 	{
 		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));		
