@@ -87,12 +87,12 @@ void gather_thread(void* arg)
 	COPCServer *opcServer = host->connectDAServer(initBaton->ProgId);
 
 	unsigned long refreshRate;
-	COPCGroup *group = opcServer->makeGroup("47CFF29B-69D6-4FF7-8FFE-DF807EEEAB93", true, 1000, refreshRate, 0.0);
+	COPCGroup *group = opcServer->makeGroup("47CFF29B-69D6-4FF7-8FFE-DF807EEEAB93", true, (unsigned long)initBaton->Rate_Ms, refreshRate, (float)initBaton->DeadBand);
 	
 	std::vector<COPCItem *>itemsCreated;
 	std::vector<HRESULT> errors;
 
-	if (group->addItems(initBaton->itemNames, itemsCreated, errors, true) != 0){
+	if (group->addItems(initBaton->ItemNames, itemsCreated, errors, true) != 0){
 		printf("Item create failed\n");
 	}
 
@@ -106,7 +106,7 @@ void gather_thread(void* arg)
 	{
 		baton->datacache.insert(std::map<std::string, std::string>::value_type(itemsCreated[i]->getName().c_str(), ""));		
 	}
-	baton->dataCallback = initBaton->dataCallback;
+	baton->dataCallback = initBaton->DataCallback;
 
 	dataChangeCallback usrCallBack(baton);
 	group->enableAsynch(usrCallBack);
@@ -142,13 +142,17 @@ NAN_METHOD(Init) {
 	v8::String::Utf8Value ProgId(getStringFromObj(lOptions, "ProgId"));
 	initBaton->ProgId = std::string(*ProgId);
 
-	Local<Array> itemNames = Local<Array>::Cast(getValueFromObject(lOptions, "itemNames"));
+	initBaton->Rate_Ms = getIntFromObject(lOptions, "Rate");
+
+	initBaton->DeadBand = getDoubleFromObject(lOptions, "DeadBand");
+
+	Local<Array> itemNames = Local<Array>::Cast(getValueFromObject(lOptions, "ItemNames"));
 	for (unsigned int i = 0; i < itemNames->Length(); i++) {
 		v8::String::Utf8Value itemName(itemNames->Get(i));
 		//printf("%s\n", std::string(*itemName));
-		initBaton->itemNames.push_back(std::string(*itemName));
+		initBaton->ItemNames.push_back(std::string(*itemName));
 	}
-	initBaton->dataCallback = new Nan::Callback(getValueFromObject(lOptions, "OnDataChange").As<v8::Function>());
+	initBaton->DataCallback = new Nan::Callback(getValueFromObject(lOptions, "OnDataChange").As<v8::Function>());
 	initBaton->callback.Reset(info[2].As<v8::Function>());
 
 	uv_async_init(uv_default_loop(), &s_async, async_dataCallback);

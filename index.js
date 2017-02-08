@@ -6,7 +6,9 @@ const opcda = require('./build/Release/opcda');
 
 opcda.Init("DESKTOP-JFJ715E", {
     ProgId: "Kepware.KEPServerEX.V6",
-    itemNames: [
+    Rate: 1000,
+    DeadBand:0.0,
+    ItemNames: [
         "_System._ProjectTitle",
         "_System._DateTime",
         "Data Type Examples.16 Bit Device.R Registers.Boolean1",

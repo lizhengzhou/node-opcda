@@ -31,8 +31,10 @@ struct InitBaton
 {
 	std::string HostName;
 	std::string ProgId;
-	std::vector<std::string>itemNames;
-	Nan::Callback* dataCallback;
+	uint64_t Rate_Ms;
+	double DeadBand;
+	std::vector<std::string>ItemNames;
+	Nan::Callback* DataCallback;
 	Nan::Callback callback;
 	char errorString[ERROR_STRING_SIZE];
 };
@@ -71,6 +73,22 @@ v8::Local<v8::Value> getValueFromObject(v8::Local<v8::Object> options, std::stri
 
 v8::Local<v8::String> getStringFromObj(v8::Local<v8::Object> options, std::string key) {
 	return getValueFromObject(options, key)->ToString();
+}
+
+bool getBoolFromObject(v8::Local<v8::Object> options, std::string key) {
+	return getValueFromObject(options, key)->ToBoolean()->BooleanValue();
+}
+
+int getIntFromObject(v8::Local<v8::Object> options, std::string key) {
+	return getValueFromObject(options, key)->Int32Value();
+}
+
+uint64_t getLongFromObject(v8::Local<v8::Object> options, std::string key) {
+	return getValueFromObject(options, key)->IntegerValue();
+}
+
+double getDoubleFromObject(v8::Local<v8::Object> options, std::string key) {
+	return getValueFromObject(options, key)->NumberValue();
 }
 
 static uv_async_t s_async = { 0 };
