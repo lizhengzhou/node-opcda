@@ -35,22 +35,9 @@ public:
 					//printf("find2\n");
 				}
 			}
-
 			//printf("Name=%s\n", item->getName().c_str());
 			vNameStr = item->getName().c_str();
-			baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
-			//COPCItem* item = baton->itemsCreated[index++];
-			//OPCItemData* itemdata = datamap.GetNextValue(pos);
-			//std::string vNameStr = item->getName().c_str();
-			//std::string vDataStr = GetStr(itemdata->vDataValue);
-			//std::map<std::string, std::string>::iterator iter = baton->datacache.find(vNameStr);
-			//if (iter != baton->datacache.end())
-			//{
-			//	if ((*iter).second != vDataStr){
-			//		baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));
-			//		(*iter).second = vDataStr;
-			//	}
-			//}
+			baton->dataChanged.insert(std::map<std::string, std::string>::value_type(vNameStr, vDataStr));			
 		}
 		s_async.data = baton;
 		uv_async_send(&s_async);
